@@ -1,0 +1,19 @@
+#include <SFML/Graphics.hpp>
+
+int main() {
+    // SFML 2.6 style
+    sf::RenderWindow window(sf::VideoMode(800, 800), "Chess 10x10");
+
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed)
+                window.close();
+        }
+
+        window.clear(sf::Color::Black);
+        window.display();
+    }
+
+    return 0;
+}
