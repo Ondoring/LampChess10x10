@@ -17,7 +17,7 @@
 #include <cstdlib> // Для rand()
 #include <ctime>   // Для time()
 
-const int CELL_SIZE = 80; // Cell size (pixels)
+const int CELL_SIZE = 80; // Размер клетки в пикселях
 const sf::Color LIGHT_COLOR(240, 217, 181);
 const sf::Color DARK_COLOR(181, 136, 99);
 const int WINDOW_WIDTH = 1400;
@@ -27,11 +27,11 @@ const int BOARD_OFFSET_Y = 40;
 
 TextureHolder textures;
 std::vector<std::vector<Piece*>> board(10, std::vector<Piece*>(10, nullptr));
-sf::Vector2i selectedPos(-1, -1); // Выбранная клетка
-std::vector<sf::Vector2i> possibleMoves; // Возможные ходы
-bool isWhiteTurn = true; // Чей сейчас ход
-bool isCheck = false;    // Флаг шаха
-sf::Vector2i kingPosWhite(5, 8); // Позиции королей
+sf::Vector2i selectedPos(-1, -1);
+std::vector<sf::Vector2i> possibleMoves;
+bool isWhiteTurn = true;
+bool isCheck = false;
+sf::Vector2i kingPosWhite(5, 8);
 sf::Vector2i kingPosBlack(5, 1);
 
 enum class GameState {
@@ -74,13 +74,10 @@ void initBoard() {
         }
     }
 
-    // Пешки
     for (int x = 1; x < 9; ++x) {
-        // Белые пешки (линия 7)
         board[x][7] = new Pawn(PieceColor::White);
         board[x][7]->setSprite(textures.get("white_pawn"));
 
-        // Чёрные пешки (линия 2)
         board[x][2] = new Pawn(PieceColor::Black);
         board[x][2]->setSprite(textures.get("black_pawn"));
     }
@@ -132,7 +129,7 @@ void drawBoard(sf::RenderWindow& window) {
     border.setPosition(BOARD_OFFSET_X - 5, BOARD_OFFSET_Y - 5);
     border.setFillColor(sf::Color::Transparent);
     border.setOutlineThickness(10);
-    border.setOutlineColor(sf::Color(139, 69, 19)); // Коричневый
+    border.setOutlineColor(sf::Color(139, 69, 19));
     window.draw(border);
 
     // Сама доска
@@ -194,16 +191,29 @@ void movePiece(const sf::Vector2i& from, const sf::Vector2i& to) {
         to.x < 0 || to.x >= 10 || to.y < 0 || to.y >= 10 ||
         board[from.x][from.y] == nullptr) return;
 
+    Piece* movingPiece = board[from.x][from.y];
+
+    // Проверка на превращение пешки
+    if (movingPiece->getType() == PieceType::Pawn && (to.y == 0 || to.y == 9)) {
+        PieceColor color = movingPiece->getColor();
+        delete board[from.x][from.y]; // Удаляем пешку
+
+        // Создаём ферзя вместо пешки
+        board[from.x][from.y] = new Queen(color);
+        std::string textureName = (color == PieceColor::White) ? "white_queen" : "black_queen";
+        board[from.x][from.y]->setSprite(textures.get(textureName));
+    }
+
     // Обработка рокировки
     King* king = dynamic_cast<King*>(board[from.x][from.y]);
     if (king != nullptr && abs(from.x - to.x) == 2) {
-        // Короткая рокировка (вправо)
+        // Короткая рокировка
         if (to.x > from.x && to.x + 1 < 10 && board[to.x + 1][to.y] != nullptr) {
             board[to.x - 1][to.y] = board[to.x + 1][to.y];
             board[to.x + 1][to.y] = nullptr;
             board[to.x - 1][to.y]->setMoved(true);
         }
-        // Длинная рокировка (влево)
+        // Длинная рокировка
         else if (to.x < from.x && to.x - 2 >= 0 && board[to.x - 2][to.y] != nullptr) {
             board[to.x + 1][to.y] = board[to.x - 2][to.y];
             board[to.x - 2][to.y] = nullptr;
@@ -291,7 +301,6 @@ void filterLegalMoves() {
             newKingPos = move;
         }
 
-        // Проверяем безопасность короля
         bool kingSafe = !isKingUnderAttack(newKingPos, board);
 
         // Восстанавливаем состояние
@@ -469,27 +478,28 @@ int main() {
         else if (gameState == GameState::InGame) {
             drawBoard(window);
 
-            //
+            // Подсветка выбранной клетки
             if (selectedPos.x != -1) {
                 sf::RectangleShape highlight(sf::Vector2f(CELL_SIZE, CELL_SIZE));
                 highlight.setPosition(selectedPos.x * CELL_SIZE + BOARD_OFFSET_X, selectedPos.y * CELL_SIZE + BOARD_OFFSET_Y);
-                highlight.setFillColor(sf::Color(0, 255, 0, 100)); //
+                highlight.setFillColor(sf::Color(0, 255, 0, 100));
                 window.draw(highlight);
             }
 
+            // Королю шах
             if (isCheck) {
                 sf::Vector2i kingPos = isWhiteTurn ? kingPosWhite : kingPosBlack;
                 sf::RectangleShape highlight(sf::Vector2f(CELL_SIZE, CELL_SIZE));
                 highlight.setPosition(kingPos.x * CELL_SIZE + BOARD_OFFSET_X, kingPos.y * CELL_SIZE + BOARD_OFFSET_Y);
-                highlight.setFillColor(sf::Color(255, 0, 0, 100)); //
+                highlight.setFillColor(sf::Color(255, 0, 0, 100));
                 window.draw(highlight);
             }
 
             drawPieces(window);
 
-            //
+            // Подсветка возможных ходов
             for (const auto& move : possibleMoves) {
-                sf::CircleShape marker(10.0f);  // float
+                sf::CircleShape marker(10.0f);
                 marker.setPosition(
                     static_cast<float>(move.x * CELL_SIZE) + BOARD_OFFSET_X + CELL_SIZE / 2.0f - 10.0f,
                     static_cast<float>(move.y * CELL_SIZE) + BOARD_OFFSET_Y + CELL_SIZE / 2.0f - 10.0f

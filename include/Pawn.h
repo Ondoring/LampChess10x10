@@ -8,26 +8,23 @@ public:
     PieceType getType() const override { return PieceType::Pawn; }
 
     std::vector<sf::Vector2i> getPossibleMoves(const sf::Vector2i& position,
-        const std::vector<std::vector<Piece*>>& board) const override {
+        const std::vector<std::vector<Piece*>>& board) const override
+    {
         std::vector<sf::Vector2i> moves;
         int direction = (color == PieceColor::White) ? -1 : 1;
 
-        // Ход вперёд на 1 клетку
+        // Ход вперёд
         sf::Vector2i forward(position.x, position.y + direction);
         if (forward.y >= 0 && forward.y < 10 && !board[forward.x][forward.y]) {
             moves.push_back(forward);
-        }
 
-        // Первый ход на 2 клетки
-        if (!hasMoved() && forward.y >= 0 && forward.y < 10) {  // Исправлено: hasMoved()
-            sf::Vector2i doubleForward(position.x, position.y + 2 * direction);
-            if (doubleForward.y >= 0 && doubleForward.y < 10 &&
-                !board[doubleForward.x][doubleForward.y]) {
-                moves.push_back(doubleForward);
+            // Первый ход на 2 клетки
+            if (!hasMoved() && !board[position.x][position.y + 2 * direction]) {
+                moves.push_back({ position.x, position.y + 2 * direction });
             }
         }
 
-        // Взятие по диагонали
+        // Взятие
         for (int dx : {-1, 1}) {
             sf::Vector2i capturePos(position.x + dx, position.y + direction);
             if (capturePos.x >= 0 && capturePos.x < 10 && capturePos.y >= 0 && capturePos.y < 10) {
