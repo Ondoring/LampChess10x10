@@ -85,6 +85,9 @@
       <AdditionalLibraryDirectories>D:\Programmin\SFML-2.6.2\lib;D:\Programmin\SFML-3.0.0\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>sfml-graphics.lib; sfml-window.lib; sfml-system.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /E "$(ProjectDir)assets" "$(OutDir)assets\"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -105,6 +108,9 @@
       <AdditionalLibraryDirectories>D:\Programmin\SFML-2.6.2\lib;D:\Programmin\SFML-3.0.0\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>sfml-graphics.lib; sfml-window.lib; sfml-system.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /E "$(ProjectDir)assets" "$(OutDir)assets\"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -121,6 +127,9 @@
       <AdditionalLibraryDirectories>D:\Programmin\SFML-2.6.2\lib;D:\Programmin\SFML-3.0.0\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>sfml-graphics.lib; sfml-window.lib; sfml-system.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /E "$(ProjectDir)assets" "$(OutDir)assets\"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -141,9 +150,15 @@
       <AdditionalLibraryDirectories>D:\Programmin\SFML-2.6.2\lib;D:\Programmin\SFML-3.0.0\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>sfml-graphics.lib; sfml-window.lib; sfml-system.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /E "$(ProjectDir)assets" "$(OutDir)assets\"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\TextureHolder.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
