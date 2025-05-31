@@ -7,6 +7,7 @@
 #include "include/Knight.h"
 #include "include/Queen.h"
 #include "include/Rook.h"
+#include "include/GameLogic.h"
 #include <iostream>
 #include <filesystem>
 #include <vector>
@@ -20,6 +21,15 @@ TextureHolder textures;
 std::vector<std::vector<Piece*>> board(10, std::vector<Piece*>(10, nullptr));
 sf::Vector2i selectedPos(-1, -1); // Выбранная клетка
 std::vector<sf::Vector2i> possibleMoves; // Возможные ходы
+bool isWhiteTurn = true; // Чей сейчас ход
+bool isCheck = false;    // Флаг шаха
+sf::Vector2i kingPosWhite(5, 8); // Позиции королей
+sf::Vector2i kingPosBlack(5, 1);
+
+void filterLegalMoves();
+void movePiece(const sf::Vector2i& from, const sf::Vector2i& to);
+void updateKingPosition();
+bool isCheckmate(bool isWhite);
 
 void loadTextures() {
     for (const auto& entry : std::filesystem::directory_iterator("assets")) {
@@ -108,12 +118,13 @@ void drawBoard(sf::RenderWindow& window) {
 void drawPieces(sf::RenderWindow& window) {
     for (int x = 0; x < 10; ++x) {
         for (int y = 0; y < 10; ++y) {
-            if (board[x][y]) {
+            if (board[x][y] != nullptr) {
                 sf::Sprite piece = board[x][y]->getSprite();
-                // Центрирование спрайта в клетке
+                float offsetX = (static_cast<float>(CELL_SIZE) - piece.getLocalBounds().width) / 2.0f;
+                float offsetY = (static_cast<float>(CELL_SIZE) - piece.getLocalBounds().height) / 2.0f;
                 piece.setPosition(
-                    x * CELL_SIZE + (CELL_SIZE - piece.getLocalBounds().width) / 2,
-                    y * CELL_SIZE + (CELL_SIZE - piece.getLocalBounds().height) / 2
+                    static_cast<float>(x * CELL_SIZE) + offsetX,
+                    static_cast<float>(y * CELL_SIZE) + offsetY
                 );
                 window.draw(piece);
             }
@@ -127,20 +138,141 @@ void handleMouseClick(const sf::Vector2i& mousePos) {
 
     if (x < 0 || x >= 10 || y < 0 || y >= 10) return;
 
-    if (board[x][y] && board[x][y]->getColor() == PieceColor::White) {
+    // Выбор фигуры
+    if (board[x][y] && board[x][y]->getColor() == (isWhiteTurn ? PieceColor::White : PieceColor::Black)) {
         selectedPos = sf::Vector2i(x, y);
         possibleMoves = board[x][y]->getPossibleMoves(selectedPos, board);
+        filterLegalMoves();
+        return;
     }
-    else if (selectedPos.x != -1 &&
-        std::find(possibleMoves.begin(), possibleMoves.end(), sf::Vector2i(x, y)) != possibleMoves.end()) {
-        board[x][y] = board[selectedPos.x][selectedPos.y];
-        board[selectedPos.x][selectedPos.y] = nullptr;
-        board[x][y]->setMoved(true);
+
+    // Выполнение хода
+    if (selectedPos.x != -1 && std::find(possibleMoves.begin(), possibleMoves.end(), sf::Vector2i(x, y)) != possibleMoves.end()) {
+        movePiece(selectedPos, sf::Vector2i(x, y));
+        isWhiteTurn = !isWhiteTurn;
+        updateKingPosition();
+        isCheck = isKingUnderAttack(isWhiteTurn ? kingPosWhite : kingPosBlack, board);
         selectedPos = sf::Vector2i(-1, -1);
         possibleMoves.clear();
     }
 }
 
+void movePiece(const sf::Vector2i& from, const sf::Vector2i& to) {
+    // Проверка валидности позиций
+    if (from.x < 0 || from.x >= 10 || from.y < 0 || from.y >= 10 ||
+        to.x < 0 || to.x >= 10 || to.y < 0 || to.y >= 10 ||
+        board[from.x][from.y] == nullptr) return;
+
+    // Обработка рокировки
+    King* king = dynamic_cast<King*>(board[from.x][from.y]);
+    if (king != nullptr && abs(from.x - to.x) == 2) {
+        // Короткая рокировка (вправо)
+        if (to.x > from.x && to.x + 1 < 10 && board[to.x + 1][to.y] != nullptr) {
+            board[to.x - 1][to.y] = board[to.x + 1][to.y];
+            board[to.x + 1][to.y] = nullptr;
+            board[to.x - 1][to.y]->setMoved(true);
+        }
+        // Длинная рокировка (влево)
+        else if (to.x < from.x && to.x - 2 >= 0 && board[to.x - 2][to.y] != nullptr) {
+            board[to.x + 1][to.y] = board[to.x - 2][to.y];
+            board[to.x - 2][to.y] = nullptr;
+            board[to.x + 1][to.y]->setMoved(true);
+        }
+    }
+
+    // Стандартное перемещение
+    delete board[to.x][to.y];
+    board[to.x][to.y] = board[from.x][from.y];
+    board[from.x][from.y] = nullptr;
+    board[to.x][to.y]->setMoved(true);
+
+    // Обновляем позицию короля
+    if (king != nullptr) {
+        if (king->getColor() == PieceColor::White) {
+            kingPosWhite = to;
+        }
+        else {
+            kingPosBlack = to;
+        }
+    }
+}
+
+bool isCheckmate(bool isWhite) {
+    // Проверяем все возможные ходы
+    for (int x = 0; x < 10; ++x) {
+        for (int y = 0; y < 10; ++y) {
+            if (board[x][y] && board[x][y]->getColor() == (isWhite ? PieceColor::White : PieceColor::Black)) {
+                selectedPos = sf::Vector2i(x, y);
+                possibleMoves = board[x][y]->getPossibleMoves(selectedPos, board);
+                filterLegalMoves();
+
+                if (!possibleMoves.empty()) {
+                    return false; // Нашли хотя бы один легальный ход
+                }
+            }
+        }
+    }
+    return true; // Нет легальных ходов
+}
+
+void filterLegalMoves() {
+    std::vector<sf::Vector2i> legalMoves;
+
+    if (selectedPos.x < 0 || selectedPos.x >= 10 ||
+        selectedPos.y < 0 || selectedPos.y >= 10 ||
+        !board[selectedPos.x][selectedPos.y]) {
+        possibleMoves.clear();
+        return;
+    }
+
+    Piece* movingPiece = board[selectedPos.x][selectedPos.y];
+    PieceColor movingColor = movingPiece->getColor();
+    sf::Vector2i originalKingPos = (movingColor == PieceColor::White) ? kingPosWhite : kingPosBlack;
+
+    for (const auto& move : possibleMoves) {
+        // Временное сохранение состояния
+        Piece* temp = board[move.x][move.y];
+        board[move.x][move.y] = movingPiece;
+        board[selectedPos.x][selectedPos.y] = nullptr;
+
+        // Обновляем позицию короля, если двигаем короля
+        sf::Vector2i newKingPos = originalKingPos;
+        if (movingPiece->getType() == PieceType::King) {
+            newKingPos = move;
+        }
+
+        // Проверяем безопасность короля
+        bool kingSafe = !isKingUnderAttack(newKingPos, board);
+
+        // Восстанавливаем состояние
+        board[selectedPos.x][selectedPos.y] = movingPiece;
+        board[move.x][move.y] = temp;
+
+        if (kingSafe) {
+            legalMoves.push_back(move);
+        }
+    }
+
+    possibleMoves = legalMoves;
+}
+
+void updateKingPosition() {
+    kingPosWhite = sf::Vector2i(-1, -1);
+    kingPosBlack = sf::Vector2i(-1, -1);
+
+    for (int x = 0; x < 10; ++x) {
+        for (int y = 0; y < 10; ++y) {
+            if (board[x][y] && board[x][y]->getType() == PieceType::King) {
+                if (board[x][y]->getColor() == PieceColor::White) {
+                    kingPosWhite = sf::Vector2i(x, y);
+                }
+                else {
+                    kingPosBlack = sf::Vector2i(x, y);
+                }
+            }
+        }
+    }
+}
 int main() {
     sf::RenderWindow window(sf::VideoMode(800, 800), "Chess 10x10");
     loadTextures();
@@ -170,6 +302,14 @@ int main() {
             window.draw(highlight);
         }
 
+        if (isCheck) {
+            sf::Vector2i kingPos = isWhiteTurn ? kingPosWhite : kingPosBlack;
+            sf::RectangleShape highlight(sf::Vector2f(CELL_SIZE, CELL_SIZE));
+            highlight.setPosition(kingPos.x * CELL_SIZE, kingPos.y * CELL_SIZE);
+            highlight.setFillColor(sf::Color(255, 0, 0, 100)); // Красное подстветка
+            window.draw(highlight);
+        }
+
         // Подсветка возможных ходов
         for (const auto& move : possibleMoves) {
             sf::CircleShape marker(10.0f);  // Явно float
@@ -180,8 +320,25 @@ int main() {
             marker.setFillColor(sf::Color(255, 255, 0, 150));
             window.draw(marker);
         }
+        if (selectedPos.x >= 0 && selectedPos.x < 10 &&
+            selectedPos.y >= 0 && selectedPos.y < 10 &&
+            board[selectedPos.x][selectedPos.y] != nullptr)
+        {
+            King* king = dynamic_cast<King*>(board[selectedPos.x][selectedPos.y]);
+            if (king != nullptr) {
+                for (const auto& move : possibleMoves) {
+                    if (abs(move.x - selectedPos.x) == 2) {
+                        sf::RectangleShape rect(sf::Vector2f(CELL_SIZE, CELL_SIZE));
+                        rect.setPosition(move.x * CELL_SIZE, move.y * CELL_SIZE);
+                        rect.setFillColor(sf::Color(100, 200, 255, 150));
+                        window.draw(rect);
+                    }
+                }
+            }
+        }
 
         drawPieces(window);
+
         window.display();
     }
 

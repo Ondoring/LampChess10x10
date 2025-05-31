@@ -1,7 +1,6 @@
 #pragma once
 #include "Piece.h"
-#include "Rook.h" // Для dynamic_cast
-#include <vector>
+#include "GameLogic.h"
 
 class King : public Piece {
 public:
@@ -9,35 +8,63 @@ public:
     PieceType getType() const override { return PieceType::King; }
 
     std::vector<sf::Vector2i> getPossibleMoves(const sf::Vector2i& position,
-        const std::vector<std::vector<Piece*>>& board) const override {
+        const std::vector<std::vector<Piece*>>& board) const override
+    {
         std::vector<sf::Vector2i> moves;
-        const int moveset[8][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1},
-                                  {1, 1}, {1, -1}, {-1, 1}, {-1, -1} };
 
-        for (const auto& m : moveset) {
-            sf::Vector2i newPos(position.x + m[0], position.y + m[1]);
-
+        // Стандартные ходы короля
+        const int kingMoves[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };
+        for (const auto& move : kingMoves) {
+            sf::Vector2i newPos(position.x + move[0], position.y + move[1]);
             if (newPos.x >= 0 && newPos.x < 10 && newPos.y >= 0 && newPos.y < 10) {
-                if (!board[newPos.x][newPos.y] || board[newPos.x][newPos.y]->getColor() != color)
+                if (!board[newPos.x][newPos.y] || board[newPos.x][newPos.y]->getColor() != color) {
                     moves.push_back(newPos);
+                }
             }
         }
 
         // Рокировка
         if (!hasMoved()) {
-            // Короткая (вправо)
-            if (position.x + 2 < 10 && board[9][position.y] &&
-                dynamic_cast<Rook*>(board[9][position.y]) &&
-                !board[9][position.y]->hasMoved()) {
-                bool pathClear = true;
-                for (int x = position.x + 1; x < 9; ++x) {
-                    if (board[x][position.y]) pathClear = false;
+            // Проверка короткой рокировки (вправо)
+            if (position.x + 3 < 10) {
+                Piece* rook = board[position.x + 3][position.y];
+                if (rook && rook->getType() == PieceType::Rook && !rook->hasMoved()) {
+                    bool pathClear = true;
+                    for (int x = position.x + 1; x < position.x + 3; ++x) {
+                        if (board[x][position.y]) {
+                            pathClear = false;
+                            break;
+                        }
+                        // Проверка, не проходит ли король через атакованное поле
+                        if (isKingUnderAttack(sf::Vector2i(x, position.y), board)) {
+                            pathClear = false;
+                            break;
+                        }
+                    }
+                    if (pathClear) moves.push_back({ position.x + 2, position.y });
                 }
-                if (pathClear) moves.push_back({ position.x + 2, position.y });
             }
-            // Длинная (влево) - аналогично
-        }
 
+            // Проверка длинной рокировки (влево)
+            if (position.x - 4 >= 0) {
+                Piece* rook = board[position.x - 4][position.y];
+                if (rook && rook->getType() == PieceType::Rook && !rook->hasMoved()) {
+                    bool pathClear = true;
+                    for (int x = position.x - 1; x > position.x - 4; --x) {
+                        if (board[x][position.y]) {
+                            pathClear = false;
+                            break;
+                        }
+                        // Проверка, не проходит ли король через атакованное поле
+                        if (isKingUnderAttack(sf::Vector2i(x, position.y), board)) {
+                            pathClear = false;
+                            break;
+                        }
+                    }
+                    if (pathClear) moves.push_back({ position.x - 2, position.y });
+                }
+            }
+        }
         return moves;
     }
 };

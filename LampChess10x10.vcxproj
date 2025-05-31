@@ -155,16 +155,20 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="include\GameLogic.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\Bishop.h" />
+    <ClInclude Include="include\GameLogic.h" />
+    <ClInclude Include="include\Interface.h" />
     <ClInclude Include="include\King.h" />
     <ClInclude Include="include\Knight.h" />
     <ClInclude Include="include\Pawn.h" />
     <ClInclude Include="include\Piece.h" />
     <ClInclude Include="include\Queen.h" />
     <ClInclude Include="include\Rook.h" />
+    <ClInclude Include="include\S1mpleAI.h" />
     <ClInclude Include="include\TextureHolder.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
