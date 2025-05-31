@@ -8,14 +8,22 @@
 #include "include/Queen.h"
 #include "include/Rook.h"
 #include "include/GameLogic.h"
+#include "include/AI.h"
+#include "include/Menu.h"
 #include <iostream>
 #include <filesystem>
 #include <vector>
 #include <algorithm>
+#include <cstdlib> // Для rand()
+#include <ctime>   // Для time()
 
 const int CELL_SIZE = 80; // Cell size (pixels)
 const sf::Color LIGHT_COLOR(240, 217, 181);
 const sf::Color DARK_COLOR(181, 136, 99);
+const int WINDOW_WIDTH = 1400;
+const int WINDOW_HEIGHT = 1000;
+const int BOARD_OFFSET_X = 40;
+const int BOARD_OFFSET_Y = 40;
 
 TextureHolder textures;
 std::vector<std::vector<Piece*>> board(10, std::vector<Piece*>(10, nullptr));
@@ -26,10 +34,24 @@ bool isCheck = false;    // Флаг шаха
 sf::Vector2i kingPosWhite(5, 8); // Позиции королей
 sf::Vector2i kingPosBlack(5, 1);
 
+enum class GameState {
+    InMenu,
+    InGame
+};
+
 void filterLegalMoves();
 void movePiece(const sf::Vector2i& from, const sf::Vector2i& to);
 void updateKingPosition();
 bool isCheckmate(bool isWhite);
+
+void resetGameState() {
+    selectedPos = sf::Vector2i(-1, -1);
+    possibleMoves.clear();
+    isWhiteTurn = true;
+    isCheck = false;
+    kingPosWhite = sf::Vector2i(5, 8);
+    kingPosBlack = sf::Vector2i(5, 1);
+}
 
 void loadTextures() {
     for (const auto& entry : std::filesystem::directory_iterator("assets")) {
@@ -105,10 +127,19 @@ void initBoard() {
 }
 
 void drawBoard(sf::RenderWindow& window) {
+    // Рамка вокруг доски
+    sf::RectangleShape border(sf::Vector2f(CELL_SIZE * 10 + 10, CELL_SIZE * 10 + 10));
+    border.setPosition(BOARD_OFFSET_X - 5, BOARD_OFFSET_Y - 5);
+    border.setFillColor(sf::Color::Transparent);
+    border.setOutlineThickness(10);
+    border.setOutlineColor(sf::Color(139, 69, 19)); // Коричневый
+    window.draw(border);
+
+    // Сама доска
     for (int x = 0; x < 10; ++x) {
         for (int y = 0; y < 10; ++y) {
             sf::RectangleShape cell(sf::Vector2f(CELL_SIZE, CELL_SIZE));
-            cell.setPosition(x * CELL_SIZE, y * CELL_SIZE);
+            cell.setPosition(BOARD_OFFSET_X + x * CELL_SIZE, BOARD_OFFSET_Y + y * CELL_SIZE);
             cell.setFillColor((x + y) % 2 == 0 ? LIGHT_COLOR : DARK_COLOR);
             window.draw(cell);
         }
@@ -123,8 +154,8 @@ void drawPieces(sf::RenderWindow& window) {
                 float offsetX = (static_cast<float>(CELL_SIZE) - piece.getLocalBounds().width) / 2.0f;
                 float offsetY = (static_cast<float>(CELL_SIZE) - piece.getLocalBounds().height) / 2.0f;
                 piece.setPosition(
-                    static_cast<float>(x * CELL_SIZE) + offsetX,
-                    static_cast<float>(y * CELL_SIZE) + offsetY
+                    static_cast<float>(x * CELL_SIZE) + offsetX + BOARD_OFFSET_X,
+                    static_cast<float>(y * CELL_SIZE) + offsetY + BOARD_OFFSET_Y
                 );
                 window.draw(piece);
             }
@@ -133,8 +164,8 @@ void drawPieces(sf::RenderWindow& window) {
 }
 
 void handleMouseClick(const sf::Vector2i& mousePos) {
-    int x = mousePos.x / CELL_SIZE;
-    int y = mousePos.y / CELL_SIZE;
+    int x = (mousePos.x - BOARD_OFFSET_X + 40) / CELL_SIZE;
+    int y = (mousePos.y - BOARD_OFFSET_Y + 40) / CELL_SIZE;
 
     if (x < 0 || x >= 10 || y < 0 || y >= 10) return;
 
@@ -197,22 +228,41 @@ void movePiece(const sf::Vector2i& from, const sf::Vector2i& to) {
     }
 }
 
-bool isCheckmate(bool isWhite) {
+bool isCheckmate(bool forWhite) {
+    const sf::Vector2i& kingPos = forWhite ? kingPosWhite : kingPosBlack;
+    PieceColor color = forWhite ? PieceColor::White : PieceColor::Black;
+
     // Проверяем все возможные ходы
     for (int x = 0; x < 10; ++x) {
         for (int y = 0; y < 10; ++y) {
-            if (board[x][y] && board[x][y]->getColor() == (isWhite ? PieceColor::White : PieceColor::Black)) {
-                selectedPos = sf::Vector2i(x, y);
-                possibleMoves = board[x][y]->getPossibleMoves(selectedPos, board);
-                filterLegalMoves();
+            if (board[x][y] && board[x][y]->getColor() == color) {
+                auto moves = board[x][y]->getPossibleMoves(sf::Vector2i(x, y), board);
+                for (const auto& move : moves) {
+                    // Пробуем временный ход
+                    Piece* temp = board[move.x][move.y];
+                    board[move.x][move.y] = board[x][y];
+                    board[x][y] = nullptr;
 
-                if (!possibleMoves.empty()) {
-                    return false; // Нашли хотя бы один легальный ход
+                    // Обновляем позицию короля, если двигаем короля
+                    sf::Vector2i tempKingPos = kingPos;
+                    if (board[move.x][move.y]->getType() == PieceType::King) {
+                        tempKingPos = move;
+                    }
+
+                    bool stillInCheck = isKingUnderAttack(tempKingPos, board);
+
+                    // Отменяем ход
+                    board[x][y] = board[move.x][move.y];
+                    board[move.x][move.y] = temp;
+
+                    if (!stillInCheck) {
+                        return false; // Нашли ход, снимающий шах
+                    }
                 }
             }
         }
     }
-    return true; // Нет легальных ходов
+    return true; // Нет ходов, снимающих шах
 }
 
 void filterLegalMoves() {
@@ -273,10 +323,59 @@ void updateKingPosition() {
         }
     }
 }
+
+void drawGameInfo(sf::RenderWindow& window, const sf::Font& font, bool isWhiteTurn, bool isCheck) {
+    sf::RectangleShape panel(sf::Vector2f(300, 400));
+    panel.setPosition(950, 100);
+    panel.setFillColor(sf::Color(240, 240, 240));
+    window.draw(panel);
+
+    sf::Text turnText;
+    turnText.setFont(font);
+    turnText.setString("Current turn: " + std::string(isWhiteTurn ? "White" : "Black"));
+    turnText.setPosition(975, 120);
+    turnText.setFillColor(sf::Color::Black);
+    window.draw(turnText);
+
+    if (isCheck) {
+        if (!isCheckmate(isWhiteTurn)) {
+            sf::Text checkText;
+            checkText.setFont(font);
+            checkText.setString("CHECK!");
+            checkText.setPosition(1000, 170);
+            checkText.setFillColor(sf::Color::Red);
+            window.draw(checkText);
+        }
+    }
+
+
+    // Кнопка возврата в меню
+    sf::RectangleShape menuButton(sf::Vector2f(200, 50));
+    menuButton.setPosition(1000, 600);
+    menuButton.setFillColor(sf::Color(100, 100, 100));
+    window.draw(menuButton);
+
+    sf::Text menuText;
+    menuText.setFont(font);
+    menuText.setString("Main Menu");
+    menuText.setPosition(1000 + (200 - menuText.getLocalBounds().width) / 2, 610);
+    menuText.setFillColor(sf::Color::White);
+    window.draw(menuText);
+}
+
 int main() {
-    sf::RenderWindow window(sf::VideoMode(800, 800), "Chess 10x10");
+    sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Lamp Chess 10x10");
     loadTextures();
     initBoard();
+    std::srand(std::time(nullptr));
+    sf::Font font;
+    if (!font.loadFromFile("assets/fonts/arial.ttf")) {
+        return -1;
+    }
+
+    Menu mainMenu(window);
+    GameState gameState = GameState::InMenu;
+    bool vsAI = false;
 
     while (window.isOpen()) {
         sf::Event event;
@@ -284,69 +383,141 @@ int main() {
             if (event.type == sf::Event::Closed) {
                 window.close();
             }
-            else if (event.type == sf::Event::MouseButtonPressed) {
-                if (event.mouseButton.button == sf::Mouse::Left) {
-                    handleMouseClick(sf::Vector2i(event.mouseButton.x, event.mouseButton.y));
+
+            if (event.type == sf::Event::MouseButtonPressed) {
+                sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+
+                if (gameState == GameState::InMenu) {
+                    int choice = mainMenu.handleClick(mousePos);
+                    if (choice == 1) { // Play vs Friend
+                        gameState = GameState::InGame;
+                        vsAI = false;
+                        initBoard();
+                        resetGameState();
+                        
+                    }
+                    else if (choice == 2) { // Play vs AI
+                        gameState = GameState::InGame;
+                        vsAI = true;
+                        initBoard();
+                        resetGameState();
+                    }
+                    else if (choice == 3) { // Exit
+                        window.close();
+                    }
                 }
-            }
-        }
+                else if (gameState == GameState::InGame) {
+                    // Обработка кликов в игре
+                    if (mousePos.x >= 1000 && mousePos.x <= 1200 &&
+                        mousePos.y >= 600 && mousePos.y <= 650) {
+                        gameState = GameState::InMenu; // Возврат в меню
+                    }
+                    else {
+                        handleMouseClick(mousePos - sf::Vector2i(BOARD_OFFSET_X, BOARD_OFFSET_Y));
 
-        window.clear();
-        drawBoard(window);
+                        // Ход ИИ
+                        if (vsAI && !isWhiteTurn) {
+                            bool aiInCheck = isKingUnderAttack(kingPosBlack, board);
+                            auto aiMove = ImprovedAI::findSafeMove(board, PieceColor::Black, kingPosBlack, aiInCheck);
 
-        // Подсветка выбранной клетки
-        if (selectedPos.x != -1) {
-            sf::RectangleShape highlight(sf::Vector2f(CELL_SIZE, CELL_SIZE));
-            highlight.setPosition(selectedPos.x * CELL_SIZE, selectedPos.y * CELL_SIZE);
-            highlight.setFillColor(sf::Color(0, 255, 0, 100)); // Зелёный с прозрачностью
-            window.draw(highlight);
-        }
+                            if (aiMove.first.x != -1) {
+                                movePiece(aiMove.first, aiMove.second);
+                                isWhiteTurn = true;
+                                updateKingPosition();
+                                isCheck = isKingUnderAttack(kingPosBlack, board);
 
-        if (isCheck) {
-            sf::Vector2i kingPos = isWhiteTurn ? kingPosWhite : kingPosBlack;
-            sf::RectangleShape highlight(sf::Vector2f(CELL_SIZE, CELL_SIZE));
-            highlight.setPosition(kingPos.x * CELL_SIZE, kingPos.y * CELL_SIZE);
-            highlight.setFillColor(sf::Color(255, 0, 0, 100)); // Красное подстветка
-            window.draw(highlight);
-        }
-
-        // Подсветка возможных ходов
-        for (const auto& move : possibleMoves) {
-            sf::CircleShape marker(10.0f);  // Явно float
-            marker.setPosition(
-                static_cast<float>(move.x * CELL_SIZE) + CELL_SIZE / 2.0f - 10.0f,
-                static_cast<float>(move.y * CELL_SIZE) + CELL_SIZE / 2.0f - 10.0f
-            );
-            marker.setFillColor(sf::Color(255, 255, 0, 150));
-            window.draw(marker);
-        }
-        if (selectedPos.x >= 0 && selectedPos.x < 10 &&
-            selectedPos.y >= 0 && selectedPos.y < 10 &&
-            board[selectedPos.x][selectedPos.y] != nullptr)
-        {
-            King* king = dynamic_cast<King*>(board[selectedPos.x][selectedPos.y]);
-            if (king != nullptr) {
-                for (const auto& move : possibleMoves) {
-                    if (abs(move.x - selectedPos.x) == 2) {
-                        sf::RectangleShape rect(sf::Vector2f(CELL_SIZE, CELL_SIZE));
-                        rect.setPosition(move.x * CELL_SIZE, move.y * CELL_SIZE);
-                        rect.setFillColor(sf::Color(100, 200, 255, 150));
-                        window.draw(rect);
+                                // Проверка на мат после хода ИИ
+                                if (isCheck && isCheckmate(true)) {
+                                    sf::Text checkmateText;
+                                    checkmateText.setFont(font);
+                                    checkmateText.setString("CHECKMATE!");
+                                    checkmateText.setPosition(1000, 170);
+                                    checkmateText.setFillColor(sf::Color::Red);
+                                    window.draw(checkmateText);
+                                }
+                            }
+                            else {
+                                // Если нет допустимых ходов
+                                if (aiInCheck) {
+                                    sf::Text checkmateText;
+                                    checkmateText.setFont(font);
+                                    checkmateText.setString("CHECKMATE!");
+                                    checkmateText.setPosition(1000, 170);
+                                    checkmateText.setFillColor(sf::Color::Red);
+                                    window.draw(checkmateText);
+                                }
+                                else {
+                                    sf::Text checkmateText;
+                                    checkmateText.setFont(font);
+                                    checkmateText.setString("STALEMATE!");
+                                    checkmateText.setPosition(1000, 170);
+                                    checkmateText.setFillColor(sf::Color::Red);
+                                    window.draw(checkmateText);
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        drawPieces(window);
+        window.clear(sf::Color(50, 50, 50));
+
+        if (gameState == GameState::InMenu) {
+            mainMenu.draw();
+        }
+        else if (gameState == GameState::InGame) {
+            drawBoard(window);
+
+            //
+            if (selectedPos.x != -1) {
+                sf::RectangleShape highlight(sf::Vector2f(CELL_SIZE, CELL_SIZE));
+                highlight.setPosition(selectedPos.x * CELL_SIZE + BOARD_OFFSET_X, selectedPos.y * CELL_SIZE + BOARD_OFFSET_Y);
+                highlight.setFillColor(sf::Color(0, 255, 0, 100)); //
+                window.draw(highlight);
+            }
+
+            if (isCheck) {
+                sf::Vector2i kingPos = isWhiteTurn ? kingPosWhite : kingPosBlack;
+                sf::RectangleShape highlight(sf::Vector2f(CELL_SIZE, CELL_SIZE));
+                highlight.setPosition(kingPos.x * CELL_SIZE + BOARD_OFFSET_X, kingPos.y * CELL_SIZE + BOARD_OFFSET_Y);
+                highlight.setFillColor(sf::Color(255, 0, 0, 100)); //
+                window.draw(highlight);
+            }
+
+            drawPieces(window);
+
+            //
+            for (const auto& move : possibleMoves) {
+                sf::CircleShape marker(10.0f);  // float
+                marker.setPosition(
+                    static_cast<float>(move.x * CELL_SIZE) + BOARD_OFFSET_X + CELL_SIZE / 2.0f - 10.0f,
+                    static_cast<float>(move.y * CELL_SIZE) + BOARD_OFFSET_Y + CELL_SIZE / 2.0f - 10.0f
+                );
+                marker.setFillColor(sf::Color(255, 255, 0, 150));
+                window.draw(marker);
+            }
+            if (selectedPos.x >= 0 && selectedPos.x < 10 &&
+                selectedPos.y >= 0 && selectedPos.y < 10 &&
+                board[selectedPos.x][selectedPos.y] != nullptr)
+            {
+                King* king = dynamic_cast<King*>(board[selectedPos.x][selectedPos.y]);
+                if (king != nullptr) {
+                    for (const auto& move : possibleMoves) {
+                        if (abs(move.x - selectedPos.x) == 2) {
+                            sf::RectangleShape rect(sf::Vector2f(CELL_SIZE, CELL_SIZE));
+                            rect.setPosition(move.x * CELL_SIZE + BOARD_OFFSET_X, move.y * CELL_SIZE + BOARD_OFFSET_Y);
+                            rect.setFillColor(sf::Color(100, 200, 255, 150));
+                            window.draw(rect);
+                        }
+                    }
+                }
+            }
+
+            drawGameInfo(window, font, isWhiteTurn, isCheck);
+        }
 
         window.display();
-    }
-
-    // Очистка памяти
-    for (auto& row : board) {
-        for (auto& piece : row) {
-            delete piece;
-        }
     }
 
     return 0;
