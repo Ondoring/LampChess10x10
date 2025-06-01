@@ -31,6 +31,7 @@ sf::Vector2i selectedPos(-1, -1);
 std::vector<sf::Vector2i> possibleMoves;
 bool isWhiteTurn = true;
 bool isCheck = false;
+bool hardMode = false;
 sf::Vector2i kingPosWhite(5, 8);
 sf::Vector2i kingPosBlack(5, 1);
 
@@ -60,7 +61,6 @@ void loadTextures() {
             std::string fullPath = entry.path().string();
 
             textures.load(filename, fullPath);
-            std::cout << "Loaded texture: " << filename << " from " << fullPath << std::endl;
         }
     }
 }
@@ -121,6 +121,18 @@ void initBoard() {
     board[5][8]->setSprite(textures.get("white_king"));
     board[5][1] = new King(PieceColor::Black);
     board[5][1]->setSprite(textures.get("black_king"));
+
+    if (hardMode) { // Доп. фигуры для сложного мода
+        board[0][1] = new Rook(PieceColor::Black); // Левая дополнительная ладья
+        board[0][1]->setSprite(textures.get("black_rook"));
+        board[0][2] = new Pawn(PieceColor::Black); // Левая дополнительная пешка
+        board[0][2]->setSprite(textures.get("black_pawn"));
+
+        board[9][1] = new Rook(PieceColor::Black); // Правая дополнительная ладья
+        board[9][1]->setSprite(textures.get("black_rook"));
+        board[9][2] = new Pawn(PieceColor::Black); // Правая дополнительная пешка
+        board[9][2]->setSprite(textures.get("black_pawn"));
+    }
 }
 
 void drawBoard(sf::RenderWindow& window) {
@@ -401,15 +413,23 @@ int main() {
                     if (choice == 1) { // Play vs Friend
                         gameState = GameState::InGame;
                         vsAI = false;
-                        initBoard();
+                        hardMode = false;
                         resetGameState();
-                        
+                        initBoard();
                     }
                     else if (choice == 2) { // Play vs AI
                         gameState = GameState::InGame;
                         vsAI = true;
-                        initBoard();
+                        hardMode = false;
                         resetGameState();
+                        initBoard();
+                    }
+                    else if (choice == 4) { // Hard Mode
+                        gameState = GameState::InGame;
+                        vsAI = true;
+                        hardMode = true;
+                        resetGameState();
+                        initBoard();
                     }
                     else if (choice == 3) { // Exit
                         window.close();
