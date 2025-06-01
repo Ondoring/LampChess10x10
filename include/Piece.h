@@ -23,5 +23,5 @@ public:
     void setSprite(const sf::Texture& texture) { sprite.setTexture(texture); }
     const sf::Sprite& getSprite() const { return sprite; }
     void setMoved(bool moved) { hasMoved_ = moved; }
-    bool hasMoved() const { return hasMoved_; }  // Геттер
+    bool hasMoved() const { return hasMoved_; }
 };
